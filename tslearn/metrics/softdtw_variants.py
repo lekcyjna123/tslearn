@@ -448,7 +448,7 @@ def soft_dtw_alignment(ts1, ts2, gamma=1.):
     return a, dist_sq
 
 
-def cdist_soft_dtw(dataset1, dataset2=None, gamma=1.):
+def cdist_soft_dtw(dataset1, dataset2=None, gamma=1., n_jobs=None):
     r"""Compute cross-similarity matrix using Soft-DTW metric.
 
     Soft-DTW was originally presented in [1]_ and is
@@ -477,6 +477,7 @@ def cdist_soft_dtw(dataset1, dataset2=None, gamma=1.):
         Another dataset of time series
     gamma : float (default 1.)
         Gamma paraneter for Soft-DTW
+    n_jobs : int or None (default None)
 
     Returns
     -------
@@ -514,6 +515,8 @@ def cdist_soft_dtw(dataset1, dataset2=None, gamma=1.):
     dists = numpy.empty((dataset1.shape[0], dataset2.shape[0]))
     equal_size_ds1 = check_equal_size(dataset1)
     equal_size_ds2 = check_equal_size(dataset2)
+
+    parameter_list = []
     for i, ts1 in enumerate(dataset1):
         if equal_size_ds1:
             ts1_short = ts1
@@ -525,9 +528,20 @@ def cdist_soft_dtw(dataset1, dataset2=None, gamma=1.):
             else:
                 ts2_short = ts2[:ts_size(ts2)]
             if self_similarity and j < i:
-                dists[i, j] = dists[j, i]
+                continue
             else:
-                dists[i, j] = soft_dtw(ts1_short, ts2_short, gamma=gamma)
+                parameter_list.append((ts1_short, ts2_short, gamma))
+
+    calculated_softdtw=Parallel(n_jobs=n_jobs, prefer="processes")(delayed(soft_dtw)(*parameters) for parameters in parameter_list)
+
+    result_index=0
+    for i in range(len(dataset1)):
+        for j in range(len(dataset2)):
+            if self_similarity and j < i:
+                dists[i,j]=dists[j,i]
+            else:
+                dists[i,j]=calculated_softdtw[result_index]
+                result_index+=1
 
     return dists
 

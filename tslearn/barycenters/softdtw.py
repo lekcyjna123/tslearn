@@ -2,6 +2,7 @@
 
 import numpy
 from scipy.optimize import minimize
+from joblib import Parallel, delayed
 
 from tslearn.utils import to_time_series_dataset, check_equal_size, \
     to_time_series
@@ -14,12 +15,16 @@ from .euclidean import euclidean_barycenter
 __author__ = 'Romain Tavenard romain.tavenard[at]univ-rennes2.fr'
 
 
+def _
+
 def _softdtw_func(Z, X, weights, barycenter, gamma):
     # Compute objective value and grad at Z.
 
     Z = Z.reshape(barycenter.shape)
     G = numpy.zeros_like(Z)
     obj = 0
+
+    with ProcessPoolExecutor(n_jobs) as pool:
 
     for i in range(len(X)):
         D = SquaredEuclidean(Z, X[i])
