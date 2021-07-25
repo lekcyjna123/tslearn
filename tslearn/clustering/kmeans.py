@@ -640,7 +640,8 @@ class TimeSeriesKMeans(TransformerMixin, ClusterMixin,
 
                 elif self.metric == "softdtw":
                     def metric_fun(x, y):
-                        return cdist_soft_dtw(x, y, **metric_params)
+                        return cdist_soft_dtw(x, y, n_jobs=self.n_jobs,
+                                            **metric_params)
                 else:
                     raise ValueError(
                         "Incorrect metric: %s (should be one of 'dtw', "
@@ -721,6 +722,7 @@ class TimeSeriesKMeans(TransformerMixin, ClusterMixin,
                     X=X[self.labels_ == k],
                     max_iter=self.max_iter_barycenter,
                     init=self.cluster_centers_[k],
+                    n_jobs=self.n_jobs,
                     **metric_params)
             else:
                 self.cluster_centers_[k] = euclidean_barycenter(

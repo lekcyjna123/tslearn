@@ -3,6 +3,7 @@
 import numpy
 from scipy.optimize import minimize
 from joblib import Parallel, delayed
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor
 
 from tslearn.utils import to_time_series_dataset, check_equal_size, \
     to_time_series
@@ -15,31 +16,34 @@ from .euclidean import euclidean_barycenter
 __author__ = 'Romain Tavenard romain.tavenard[at]univ-rennes2.fr'
 
 
-def _
+def _partial_contrib_to_softdtw_barycenter(Z, X, gamma):
+    """
+    Calculate contribution of timeseries X to barycenter.
+    """
+    D = SquaredEuclidean(Z, X)
+    sdtw = SoftDTW(D, gamma=gamma)
+    value = sdtw.compute()
+    E = sdtw.grad()
+    G_tmp = D.jacobian_product(E)
+    return (value, G_tmp)
 
-def _softdtw_func(Z, X, weights, barycenter, gamma):
+def _softdtw_func(Z, X, weights, barycenter, gamma, n_jobs=None):
     # Compute objective value and grad at Z.
 
     Z = Z.reshape(barycenter.shape)
     G = numpy.zeros_like(Z)
     obj = 0
 
-    with ProcessPoolExecutor(n_jobs) as pool:
-
+    partials=Parallel(n_jobs=n_jobs, prefer="processes")(delayed(_partial_contrib_to_softdtw_barycenter)(Z,X[i], gamma) for i in range(len(X)))
     for i in range(len(X)):
-        D = SquaredEuclidean(Z, X[i])
-        sdtw = SoftDTW(D, gamma=gamma)
-        value = sdtw.compute()
-        E = sdtw.grad()
-        G_tmp = D.jacobian_product(E)
-        G += weights[i] * G_tmp
-        obj += weights[i] * value
+        obj += weights[i] * partials[i][0]
+        G += weights[i] * partials[i][1]
 
     return obj, G.ravel()
 
 
 def softdtw_barycenter(X, gamma=1.0, weights=None, method="L-BFGS-B", tol=1e-3,
-                       max_iter=50, init=None):
+                       max_iter=50, init=None, n_jobs=None):
     """Compute barycenter (time series averaging) under the soft-DTW [1]
     geometry.
 
@@ -65,6 +69,9 @@ def softdtw_barycenter(X, gamma=1.0, weights=None, method="L-BFGS-B", tol=1e-3,
     init: array or None (default: None)
         Initial barycenter to start from for the optimization process.
         If `None`, euclidean barycenter is used as a starting point.
+    n_jobs: int or None (default: None)
+        The number of jobs to run in parallel for cross-distance matrix computations.
+        None means 1 unless in a joblib.parallel_backend context. -1 means using all processors.
 
     Returns
     -------
@@ -108,7 +115,7 @@ def softdtw_barycenter(X, gamma=1.0, weights=None, method="L-BFGS-B", tol=1e-3,
         X_ = numpy.array([to_time_series(d, remove_nans=True) for d in X_])
 
         def f(Z):
-            return _softdtw_func(Z, X_, weights, barycenter, gamma)
+            return _softdtw_func(Z, X_, weights, barycenter, gamma, n_jobs=n_jobs)
 
         # The function works with vectors so we need to vectorize barycenter.
         res = minimize(f, barycenter.ravel(), method=method, jac=True, tol=tol,
